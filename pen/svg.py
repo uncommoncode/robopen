@@ -1,3 +1,9 @@
+from xml.dom import minidom
+import re
+import numpy as np
+
+from .bezier import CubicBezier
+
 # TODO(emmett):
 #  * SVG gets generated from GCode (or viz code)
 #
@@ -67,3 +73,330 @@ class VectorViz:
     def plot(self):
         from IPython.core.display import display, HTML
         display(HTML(self.to_svg()))
+
+# === New Hotness === #
+
+
+class CubicBezierLineCommand:
+    def __init__(self, dp2, dp3, p4):
+        # These are relative coordinates:
+        self.dp2 = dp2
+        self.dp3 = dp3
+        self.p4 = p4
+
+
+class AbsoluteLineCommand:
+    def __init__(self, points):
+        self.points = points
+
+
+class LineCommand:
+    def __init__(self, points):
+        self.points = points
+
+
+class AbsoluteLineCommand:
+    def __init__(self, points):
+        self.points = points
+
+
+class AbsoluteMoveCommand:
+    def __init__(self, point):
+        self.point = point
+
+
+class MoveCommand:
+    def __init__(self, point):
+        self.point = point
+
+
+class ClosePathCommand:
+    pass
+
+
+class VLineCommand:
+    def __init__(self, v, absolute=False):
+        self.v = v
+        self.absolute = absolute
+
+
+class HLineCommand:
+    def __init__(self, h, absolute=False):
+        self.h = h
+        self.absolute = absolute
+
+
+class SVGPathDataParser:
+    def __init__(self):
+        self.commands = []
+        self.tokens = []
+
+    def peek_token(self):
+        if len(self.tokens) == 0:
+            return None
+        return self.tokens[0]
+
+    def pop_token(self):
+        if len(self.tokens) == 0:
+            return None
+        token = self.tokens.pop(0)
+        return token
+
+    def parse_point(self):
+        x = float(self.pop_token())
+        y = float(self.pop_token())
+        return x, y
+
+    def parse_points(self):
+        points = []
+
+        while True:
+            token = self.peek_token()
+            if token is None:
+                break
+            if token.isalpha():
+                break
+            point = self.parse_point()
+            points.append(point)
+
+        return points
+
+    def parse_bicubic_point(self):
+        return self.parse_point(), self.parse_point(), self.parse_point()
+
+    def parse_commands(self, data):
+        self.commands = []
+        STATE_START = 0
+        STATE_MOVE = 1
+        STATE_LINE = 2
+        STATE_CUBIC_BEZIER = 3
+        STATE_QUADRATIC_BEZIER = 4
+        STATE_ARC = 5
+        STATE_CLOSE = 6
+        STATE_PARSE_POINT = 7
+        STATE_PARSE_SCALAR = 8
+        STATE_VERTICAL = 9
+        STATE_DRAW = 10
+
+        self.tokens = re.split('[ ,]', data)
+        state = STATE_START
+
+        is_absolute = False
+
+        while True:
+            if len(self.tokens) == 0:
+                break
+            if state == STATE_START:
+                token = self.pop_token()
+                if token == 'm':
+                    command = MoveCommand(self.parse_point())
+                    self.commands.append(command)
+                    state = STATE_MOVE
+                    is_absolute = False
+                elif token == 'M':
+                    command = AbsoluteMoveCommand(self.parse_point())
+                    self.commands.append(command)
+                    state = STATE_MOVE
+                    is_absolute = True
+                else:
+                    raise RuntimeError('Unknown start token: {} "{}"'.format(token, data))
+            elif state == STATE_DRAW:
+                token = self.peek_token()
+                if token.lower() == 'm':
+                    state = STATE_START
+                    continue
+                token = self.pop_token()
+                if token == 'l':
+                    command = LineCommand(self.parse_points())
+                    self.commands.append(command)
+                    state = STATE_LINE
+                elif token == 'L':
+                    command = AbsoluteLineCommand(self.parse_points())
+                    self.commands.append(command)
+                    state = STATE_LINE
+                elif token == 'c':
+                    p1, p2, pc = self.parse_bicubic_point()
+                    command = CubicBezierLineCommand(p1, p2, pc)
+                    self.commands.append(command)
+                    state = STATE_CUBIC_BEZIER
+                elif token == 'z':
+                    self.commands.append(ClosePathCommand())
+                elif token.lower() == 'v':
+                    v = float(self.pop_token())
+                    command = VLineCommand(v, absolute=token.isupper())
+                    self.commands.append(command)
+                elif token.lower() == 'h':
+                    v = float(self.pop_token())
+                    command = HLineCommand(v, absolute=token.isupper())
+                    self.commands.append(command)
+                else:
+                    raise RuntimeError('Unsupported token: {} "{}" {}'.format(token, data, self.commands[-1]))
+            elif state == STATE_MOVE:
+                token = self.peek_token()
+                if token.isalpha():
+                    state = STATE_DRAW
+                    continue
+                else:
+                    # Implicit transition to line
+                    if is_absolute:
+                        command = AbsoluteLineCommand(self.parse_points())
+                    else:
+                        command = LineCommand(self.parse_points())
+                    self.commands.append(command)
+                    state = STATE_LINE
+            elif state == STATE_CUBIC_BEZIER:
+                token = self.peek_token()
+                if token.isalpha():
+                    state = STATE_DRAW
+                    continue
+                else:
+                    p1, p2, pc = self.parse_bicubic_point()
+                    command = CubicBezierLineCommand(p1, p2, pc)
+                    self.commands.append(command)
+            elif state == STATE_LINE:
+                state = STATE_DRAW
+            else:
+                raise RuntimeError('Unsupported state: {}'.format(state))
+
+        return self.commands
+
+    def data_to_segments(self, data, bezier_distance_tolerance=0.5):
+        commands = self.parse_commands(data)
+        position = None
+        segments = []
+        points = []
+        for command in commands:
+            if type(command) == MoveCommand or type(command) == AbsoluteMoveCommand:
+                if len(points) != 0:
+                    segments.append(np.array(points))
+                    points = []
+                position = np.array(command.point)
+            elif type(command) == CubicBezierLineCommand:
+                p1 = np.array(position)
+                p2 = p1 + command.dp2
+                p3 = p1 + command.dp3
+                p4 = command.p4 + p1
+                for point in CubicBezier(p1, p2, p3, p4, distance_tolerance=bezier_distance_tolerance).to_points():
+                    points.append(point)
+                position = p4
+            elif type(command) == LineCommand:
+                for point in command.points:
+                    pabs = point + np.array(position)
+                    points.append(pabs)
+                    position = pabs
+            elif type(command) == AbsoluteLineCommand:
+                for point in command.points:
+                    pabs = point
+                    points.append(pabs)
+                    position = pabs
+            elif type(command) == VLineCommand:
+                if command.v == 0:
+                    continue
+                if command.absolute:
+                    offset = np.array([0, 0])
+                else:
+                    offset = position
+                vector = np.array([0, 1]) * command.v
+                pabs = offset + vector
+                points.append(pabs)
+                position = pabs
+            elif type(command) == HLineCommand:
+                if command.h == 0:
+                    continue
+                if command.absolute:
+                    offset = np.array([0, 0])
+                else:
+                    offset = position
+                vector = np.array([1, 0]) * command.h
+                pabs = offset + vector
+                points.append(pabs)
+                position = pabs
+            else:
+                raise RuntimeError('Unknown type: {}'.format(type(command)))
+        if len(points) != 0:
+            segments.append(np.array(points))
+        return segments
+
+
+class SVGEllipse:
+    def __init__(self, cx, cy, rx, ry, style=None):
+        self.cx = cx
+        self.cy = cy
+        self.rx = rx
+        self.ry = ry
+        self.style = style
+
+
+class SVGRect:
+    def __init__(self, x, y, width, height, style=None):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.style = style
+
+
+class SVGPath:
+    def __init__(self, data, style=None):
+        self.data = data
+        self.style = style
+
+    def to_segments(self):
+        # A path can annoyingly contain more than one segment.
+        parser = SVGPathDataParser()
+        segments = parser.data_to_segments(self.data)
+        return segments
+
+
+class SVGParser:
+    def __init__(self):
+        pass
+
+    def handle_ellipse(self, ellipse):
+        pass
+
+    def handle_rect(self, rect):
+        pass
+
+    def handle_path(self, path):
+        pass
+
+    def parse(self, path):
+        doc = minidom.parse(path)
+        svg, = doc.getElementsByTagName('svg')
+
+        for element in svg.getElementsByTagName('rect'):
+            self.handle_rect(self.element_to_rect(element))
+
+        for element in svg.getElementsByTagName('ellipse'):
+            self.handle_ellipse(self.element_to_ellipse(element))
+
+        for element in svg.getElementsByTagName('path'):
+            self.handle_path(self.element_to_path(element))
+
+    def element_to_rect(self, element):
+        attrs = element.attributes
+        return SVGRect(
+            x=attrs['x'].value,
+            y=attrs['y'].value,
+            width=attrs['width'].value,
+            height=attrs['height'].value,
+            style=attrs['style'].value,
+        )
+
+    def element_to_ellipse(self, element):
+        attrs = element.attributes
+        return SVGEllipse(
+            cx=attrs['cx'].value,
+            cy=attrs['cy'].value,
+            rx=attrs['rx'].value,
+            ry=attrs['ry'].value,
+            style=attrs['style'].value,
+        )
+
+    def element_to_path(self, element):
+        attrs = element.attributes
+        return SVGPath(
+            data=attrs['d'].value,
+            style=attrs['style'].value,
+        )

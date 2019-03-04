@@ -17,7 +17,7 @@ def down_main(args):
 
 
 def move_main(args):
-    run_gcode([GCode.move_fast(args.x, args.y)], device=args.device)
+    run_gcode([GCode.move_fast([args.x, args.y])], device=args.device)
 
 
 def reset_main(args):
@@ -36,10 +36,11 @@ def draw_main(args):
     print('Bounds: {} {} {} {}'.format(x_min, x_max, y_min, y_max))
 
     # Maybe in the future we support some sort of 'glitch mode?'
-    if x_min < 0.0 or x_max > DRAW_WIDTH_EU:
-        raise RuntimeError('Invalid x boundaries! {} {}'.format(x_min, x_max))
-    if y_min < 0.0 or y_max > DRAW_HEIGHT_EU:
-        raise RuntimeError('Invalid y boundaries: {} {}'.format(y_min, y_max))
+    if not args.skip_bounds_check:
+        if x_min < 0.0 or x_max > DRAW_WIDTH_EU:
+            raise RuntimeError('Invalid x boundaries! {} {}'.format(x_min, x_max))
+        if y_min < 0.0 or y_max > DRAW_HEIGHT_EU:
+            raise RuntimeError('Invalid y boundaries: {} {}'.format(y_min, y_max))
 
     trace_bounds_commands = [
         GCode.move_fast([0, 0]),
@@ -100,6 +101,7 @@ def main():
 
     draw_parser = subparsers.add_parser('draw')
     draw_parser.add_argument('--gcode')
+    draw_parser.add_argument('--skip_bounds_check', action='store_true')
     draw_parser.add_argument('--feed_rate', default=1000, type=int)
     draw_parser.add_argument('--test', action='store_true')
     draw_parser.add_argument('--frame', action='store_true')
