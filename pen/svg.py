@@ -85,29 +85,16 @@ class CubicBezierLineCommand:
         self.p4 = p4
 
 
-class AbsoluteLineCommand:
-    def __init__(self, points):
-        self.points = points
-
-
 class LineCommand:
-    def __init__(self, points):
+    def __init__(self, points, absolute=False):
         self.points = points
-
-
-class AbsoluteLineCommand:
-    def __init__(self, points):
-        self.points = points
-
-
-class AbsoluteMoveCommand:
-    def __init__(self, point):
-        self.point = point
+        self.absolute = absolute
 
 
 class MoveCommand:
-    def __init__(self, point):
+    def __init__(self, point, absolute=False):
         self.point = point
+        self.absolute = absolute
 
 
 class ClosePathCommand:
@@ -188,16 +175,11 @@ class SVGPathDataParser:
                 break
             if state == STATE_START:
                 token = self.pop_token()
-                if token == 'm':
-                    command = MoveCommand(self.parse_point())
+                if token.lower() == 'm':
+                    is_absolute = token.isupper()
+                    command = MoveCommand(self.parse_point(), absolute=is_absolute)
                     self.commands.append(command)
                     state = STATE_MOVE
-                    is_absolute = False
-                elif token == 'M':
-                    command = AbsoluteMoveCommand(self.parse_point())
-                    self.commands.append(command)
-                    state = STATE_MOVE
-                    is_absolute = True
                 else:
                     raise RuntimeError('Unknown start token: {} "{}"'.format(token, data))
             elif state == STATE_DRAW:
@@ -206,12 +188,9 @@ class SVGPathDataParser:
                     state = STATE_START
                     continue
                 token = self.pop_token()
-                if token == 'l':
-                    command = LineCommand(self.parse_points())
-                    self.commands.append(command)
-                    state = STATE_LINE
-                elif token == 'L':
-                    command = AbsoluteLineCommand(self.parse_points())
+                if token.lower() == 'l':
+                    absolute = token.isupper()
+                    command = LineCommand(self.parse_points(), absolute=absolute)
                     self.commands.append(command)
                     state = STATE_LINE
                 elif token == 'c':
@@ -238,10 +217,7 @@ class SVGPathDataParser:
                     continue
                 else:
                     # Implicit transition to line
-                    if is_absolute:
-                        command = AbsoluteLineCommand(self.parse_points())
-                    else:
-                        command = LineCommand(self.parse_points())
+                    command = LineCommand(self.parse_points(), absolute=is_absolute)
                     self.commands.append(command)
                     state = STATE_LINE
             elif state == STATE_CUBIC_BEZIER:
@@ -266,11 +242,12 @@ class SVGPathDataParser:
         segments = []
         points = []
         for command in commands:
-            if type(command) == MoveCommand or type(command) == AbsoluteMoveCommand:
+            if type(command) == MoveCommand:
                 if len(points) != 0:
                     segments.append(np.array(points))
                     points = []
                 position = np.array(command.point)
+                points.append(position)
             elif type(command) == CubicBezierLineCommand:
                 p1 = np.array(position)
                 p2 = p1 + command.dp2
@@ -280,15 +257,16 @@ class SVGPathDataParser:
                     points.append(point)
                 position = p4
             elif type(command) == LineCommand:
-                for point in command.points:
-                    pabs = point + np.array(position)
-                    points.append(pabs)
-                    position = pabs
-            elif type(command) == AbsoluteLineCommand:
-                for point in command.points:
-                    pabs = point
-                    points.append(pabs)
-                    position = pabs
+                if command.absolute:
+                    for point in command.points:
+                        pabs = point
+                        points.append(pabs)
+                        position = pabs
+                else:
+                    for point in command.points:
+                        pabs = point + np.array(position)
+                        points.append(pabs)
+                        position = pabs
             elif type(command) == VLineCommand:
                 if command.v == 0:
                     continue
