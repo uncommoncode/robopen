@@ -52,3 +52,11 @@ class CubicBezier:
         self._recursive_segment(self.p1, self.p2, self.p3, self.p4, level=0)
         self.points.append(self.p4)
         return np.array(self.points)
+
+    @classmethod
+    def from_quadratic(cls, qp1, qp2, qp3, distance_tolerance=DEFAULT_DISTANCE_TOLERANCE):
+        cp1 = qp1
+        cp4 = qp3
+        cp2 = qp1 + 2 / 3.0 * (qp2 - qp1)
+        cp3 = qp3 + 2 / 3.0 * (qp2 - qp3)
+        return cls(cp1, cp2, cp3, cp4, distance_tolerance=distance_tolerance)

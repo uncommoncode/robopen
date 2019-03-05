@@ -85,6 +85,13 @@ class CubicBezierLineCommand:
         self.p4 = p4
 
 
+class QuadraticBezierLineCommand:
+    def __init__(self, dp2, p3):
+        # These are relative coordinates:
+        self.dp2 = dp2
+        self.p3 = p3
+
+
 class LineCommand:
     def __init__(self, points, absolute=False):
         self.points = points
@@ -151,6 +158,9 @@ class SVGPathDataParser:
     def parse_bicubic_point(self):
         return self.parse_point(), self.parse_point(), self.parse_point()
 
+    def parse_quadratic_point(self):
+        return self.parse_point(), self.parse_point()
+
     def parse_commands(self, data):
         self.commands = []
         STATE_START = 0
@@ -194,10 +204,15 @@ class SVGPathDataParser:
                     self.commands.append(command)
                     state = STATE_LINE
                 elif token == 'c':
-                    p1, p2, pc = self.parse_bicubic_point()
-                    command = CubicBezierLineCommand(p1, p2, pc)
+                    dp2, dp3, p4 = self.parse_bicubic_point()
+                    command = CubicBezierLineCommand(dp2, dp3, p4)
                     self.commands.append(command)
                     state = STATE_CUBIC_BEZIER
+                elif token == 'q':
+                    dp2, p3 = self.parse_quadratic_point()
+                    command = QuadraticBezierLineCommand(dp2, p3)
+                    self.commands.append(command)
+                    state = STATE_QUADRATIC_BEZIER
                 elif token == 'z':
                     self.commands.append(ClosePathCommand())
                 elif token.lower() == 'v':
@@ -226,8 +241,17 @@ class SVGPathDataParser:
                     state = STATE_DRAW
                     continue
                 else:
-                    p1, p2, pc = self.parse_bicubic_point()
-                    command = CubicBezierLineCommand(p1, p2, pc)
+                    dp2, dp3, p4 = self.parse_bicubic_point()
+                    command = CubicBezierLineCommand(dp2, dp3, p4)
+                    self.commands.append(command)
+            elif state == STATE_QUADRATIC_BEZIER:
+                token = self.peek_token()
+                if token.isalpha():
+                    state = STATE_DRAW
+                    continue
+                else:
+                    dp2, p3 = self.parse_quadratic_point()
+                    command = QuadraticBezierLineCommand(dp2, p3)
                     self.commands.append(command)
             elif state == STATE_LINE:
                 state = STATE_DRAW
@@ -253,9 +277,18 @@ class SVGPathDataParser:
                 p2 = p1 + command.dp2
                 p3 = p1 + command.dp3
                 p4 = command.p4 + p1
-                for point in CubicBezier(p1, p2, p3, p4, distance_tolerance=bezier_distance_tolerance).to_points():
+                cubic_bezier = CubicBezier(p1, p2, p3, p4, distance_tolerance=bezier_distance_tolerance)
+                for point in cubic_bezier.to_points():
                     points.append(point)
                 position = p4
+            elif type(command) == QuadraticBezierLineCommand:
+                qp1 = np.array(position)
+                qp2 = qp1 + command.dp2
+                qp3 = qp1 + command.p3
+                cubic_bezier = CubicBezier.from_quadratic(qp1, qp2, qp3)
+                for point in cubic_bezier.to_points():
+                    points.append(point)
+                position = qp3
             elif type(command) == LineCommand:
                 if command.absolute:
                     for point in command.points:
@@ -289,6 +322,9 @@ class SVGPathDataParser:
                 pabs = offset + vector
                 points.append(pabs)
                 position = pabs
+            elif type(command) == ClosePathCommand:
+                points.append(points[0])
+                position = points[-1]
             else:
                 raise RuntimeError('Unknown type: {}'.format(type(command)))
         if len(points) != 0:
@@ -319,10 +355,10 @@ class SVGPath:
         self.data = data
         self.style = style
 
-    def to_segments(self):
+    def to_segments(self, bezier_distance_tolerance=0.5):
         # A path can annoyingly contain more than one segment.
         parser = SVGPathDataParser()
-        segments = parser.data_to_segments(self.data)
+        segments = parser.data_to_segments(self.data, bezier_distance_tolerance=bezier_distance_tolerance)
         return segments
 
 
