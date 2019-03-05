@@ -136,9 +136,12 @@ class SVGPathDataParser:
         token = self.tokens.pop(0)
         return token
 
+    def parse_scalar(self):
+        return float(self.pop_token())
+
     def parse_point(self):
-        x = float(self.pop_token())
-        y = float(self.pop_token())
+        x = self.parse_scalar()
+        y = self.parse_scalar()
         return x, y
 
     def parse_points(self):
@@ -171,8 +174,8 @@ class SVGPathDataParser:
         STATE_ARC = 5
         STATE_CLOSE = 6
         STATE_PARSE_POINT = 7
-        STATE_PARSE_SCALAR = 8
-        STATE_VERTICAL = 9
+        STATE_HLINE = 8
+        STATE_VLINE = 9
         STATE_DRAW = 10
 
         self.tokens = re.split('[ ,]', data)
@@ -199,8 +202,8 @@ class SVGPathDataParser:
                     continue
                 token = self.pop_token()
                 if token.lower() == 'l':
-                    absolute = token.isupper()
-                    command = LineCommand(self.parse_points(), absolute=absolute)
+                    is_absolute = token.isupper()
+                    command = LineCommand(self.parse_points(), absolute=is_absolute)
                     self.commands.append(command)
                     state = STATE_LINE
                 elif token == 'c':
@@ -216,13 +219,17 @@ class SVGPathDataParser:
                 elif token == 'z':
                     self.commands.append(ClosePathCommand())
                 elif token.lower() == 'v':
-                    v = float(self.pop_token())
-                    command = VLineCommand(v, absolute=token.isupper())
+                    v = self.parse_scalar()
+                    is_absolute = token.isupper()
+                    command = VLineCommand(v, absolute=is_absolute)
                     self.commands.append(command)
+                    state = STATE_VLINE
                 elif token.lower() == 'h':
-                    v = float(self.pop_token())
-                    command = HLineCommand(v, absolute=token.isupper())
+                    v = self.parse_scalar()
+                    is_absolute = token.isupper()
+                    command = HLineCommand(v, absolute=is_absolute)
                     self.commands.append(command)
+                    state = STATE_HLINE
                 else:
                     raise RuntimeError('Unsupported token: {} "{}" {}'.format(token, data, self.commands[-1]))
             elif state == STATE_MOVE:
@@ -253,6 +260,33 @@ class SVGPathDataParser:
                     dp2, p3 = self.parse_quadratic_point()
                     command = QuadraticBezierLineCommand(dp2, p3)
                     self.commands.append(command)
+            elif state == STATE_CUBIC_BEZIER:
+                token = self.peek_token()
+                if token.isalpha():
+                    state = STATE_DRAW
+                    continue
+                else:
+                    dp2, dp3, p4 = self.parse_bicubic_point()
+                    command = CubicBezierLineCommand(dp2, dp3, p4)
+                    self.commands.append(command)
+            elif state == STATE_VLINE:
+                token = self.peek_token()
+                if token.isalpha():
+                    state = STATE_DRAW
+                    continue
+                else:
+                    v = self.parse_scalar()
+                    command = VLineCommand(v, absolute=is_absolute)
+                    self.commands.append(command)
+            elif state == STATE_HLINE:
+                token = self.peek_token()
+                if token.isalpha():
+                    state = STATE_DRAW
+                    continue
+                else:
+                    v = self.parse_scalar()
+                    command = HLineCommand(v, absolute=is_absolute)
+                    self.commands.append(command)
             elif state == STATE_LINE:
                 state = STATE_DRAW
             else:
@@ -262,7 +296,7 @@ class SVGPathDataParser:
 
     def data_to_segments(self, data, bezier_distance_tolerance=0.5):
         commands = self.parse_commands(data)
-        position = None
+        position = np.array([0, 0])
         segments = []
         points = []
         for command in commands:
@@ -270,7 +304,10 @@ class SVGPathDataParser:
                 if len(points) != 0:
                     segments.append(np.array(points))
                     points = []
-                position = np.array(command.point)
+                if command.absolute:
+                    position = np.array(command.point)
+                else:
+                    position = np.array(command.point) + position
                 points.append(position)
             elif type(command) == CubicBezierLineCommand:
                 p1 = np.array(position)
