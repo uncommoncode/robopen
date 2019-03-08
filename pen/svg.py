@@ -341,22 +341,22 @@ class SVGPathDataParser:
                 if command.v == 0:
                     continue
                 if command.absolute:
-                    offset = np.array([0, 0])
+                    pabs = np.copy(position)
+                    pabs[1] = command.v
                 else:
-                    offset = position
-                vector = np.array([0, 1]) * command.v
-                pabs = offset + vector
+                    vector = np.array([0, 1]) * command.v
+                    pabs = position + vector
                 points.append(pabs)
                 position = pabs
             elif type(command) == HLineCommand:
                 if command.h == 0:
                     continue
                 if command.absolute:
-                    offset = np.array([0, 0])
+                    pabs = np.copy(position)
+                    pabs[0] = command.h
                 else:
-                    offset = position
-                vector = np.array([1, 0]) * command.h
-                pabs = offset + vector
+                    vector = np.array([1, 0]) * command.h
+                    pabs = position + vector
                 points.append(pabs)
                 position = pabs
             elif type(command) == ClosePathCommand:
