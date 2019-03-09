@@ -5,19 +5,24 @@ import numpy as np
 #  * Explore algorithm that picks between reversed line order or forward line order
 #  * Remove pen tap (down/up/down) or (up/down/up)
 
-def greedy_tsp(lines):
-    # TODO(emmett): refactor to use penviz primitives (arcs, paths)
-    cost_matrix = np.zeros((len(lines), len(lines)))
 
-    for i in range(len(lines)):
-        xN = lines[i][0][-1]
-        yN = lines[i][1][-1]
+class PenPath:
+    def __init__(self, start_pt, end_pt):
+        self.start_pt = start_pt
+        self.end_pt = end_pt
 
-        for j in range(len(lines)):
+
+def greedy_tsp(draw_paths):
+    # TODO(emmett): refactor to allow reversal
+    cost_matrix = np.zeros((len(draw_paths), len(draw_paths)))
+
+    for i in range(len(draw_paths)):
+        xN, yN = draw_paths[i].end_pt
+
+        for j in range(len(draw_paths)):
             if i == j:
                 continue
-            x0 = lines[j][0][0]
-            y0 = lines[j][1][0]
+            x0, y0 = draw_paths[j].start_pt
 
             dx = x0 - xN
             dy = y0 - yN
@@ -28,9 +33,8 @@ def greedy_tsp(lines):
     min_i = 0
     min_distance = cost_matrix.max()
 
-    for i in range(len(lines)):
-        x0 = lines[i][0][0]
-        y0 = lines[i][1][0]
+    for i in range(len(draw_paths)):
+        x0, y0 = draw_paths[i].start_pt
         distance_to_origin = np.sqrt(x0 ** 2 + y0 ** 2)
         if distance_to_origin <= min_distance:
             min_i = i

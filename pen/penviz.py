@@ -8,6 +8,9 @@ from .svg import SVGNode
 from .gcode import GCode
 from .mathscene import AABB
 from .mathscene import euclidian_distance
+from .optimizer import PenPath
+from .optimizer import greedy_tsp
+from .optimizer import remove_repeated_ops
 from .eleksdraw import DRAW_WIDTH_EU
 from .eleksdraw import DRAW_HEIGHT_EU
 
@@ -26,14 +29,14 @@ class OriginMode(enum.Enum):
 class Pen:
     def __init__(
             self,
+            draw_width=DRAW_WIDTH_EU,
+            draw_height=DRAW_HEIGHT_EU,
             stroke_width_mm=0.3,
             color='black',
             draw_feed_rate=1000,
             move_feed_rate=2000,
             servo_down=60,
             origin_mode=OriginMode.LOWER_RIGHT,
-            draw_width=DRAW_WIDTH_EU,
-            draw_height=DRAW_HEIGHT_EU,
     ):
         self.draw_feed_rate = draw_feed_rate
         self.move_feed_rate = move_feed_rate
@@ -84,6 +87,9 @@ class Drawable:
     def get_aabb(self):
         raise NotImplemented()
 
+    def get_pen_path(self):
+        raise NotImplemented()
+
 
 class DrawPath(Drawable):
     def __init__(self, points):
@@ -125,6 +131,12 @@ class DrawPath(Drawable):
             ] + move_linears + [
             GCode.pen_up(),
         ]
+
+    def get_pen_path(self):
+        return PenPath(
+            start_pt=self.path.points[0],
+            end_pt=self.path.points[-1],
+        )
 
 
 class DrawArc(Drawable):
@@ -192,6 +204,12 @@ class DrawArc(Drawable):
             GCode.pen_up(),
         ]
 
+    def get_pen_path(self):
+        return PenPath(
+            start_pt=self.arc.start_position,
+            end_pt=self.arc.end_position,
+        )
+
 
 class PenViz:
     def __init__(self):
@@ -207,10 +225,21 @@ class PenViz:
         point = center_pt + np.array([0, radius])
         self.draw_arc(point, point, center_pt)
 
-    def to_gcode(self, pen):
+    def to_gcode(self, pen, optimize=False):
         commands = []
-        for drawable in self.drawables:
+        drawables = self.drawables
+
+        if optimize:
+            pen_paths = [drawable.get_pen_path() for drawable in drawables]
+            order = greedy_tsp(pen_paths)
+            drawables = [drawables[i] for i in order]
+
+        for drawable in drawables:
             commands += drawable.to_gcode(pen)
+
+        if optimize:
+            commands = remove_repeated_ops(commands)
+
         return commands
 
     def get_aabb(self):
@@ -230,6 +259,6 @@ class PenViz:
         from IPython.core.display import display, HTML
         display(HTML(self.to_svg(pen)))
 
-    def save_gcode(self, out_path, pen):
+    def save_gcode(self, out_path, pen, optimize=False):
         with open(out_path, 'w') as w:
-            w.write(self.to_gcode(pen))
+            w.write('\n'.join(self.to_gcode(pen, optimize=optimize)))
