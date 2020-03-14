@@ -1,10 +1,11 @@
+import time
+
+import halo
+import tqdm
+
 from . import eleksdraw
 from . import gcode
 from . import grbl
-import tqdm
-import halo
-import time
-
 
 class GCodeCommandWrapper:
     def __init__(self, device, gcode):

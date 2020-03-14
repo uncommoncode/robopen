@@ -1,0 +1,11 @@
+language: python
+python:
+  - "2.7"
+  - "3.6"
+  - "3.7"
+install:
+  - pip install pylint
+  - python setup.py install
+before_script:
+  - pylint --version
+script: python setup.py test && pylint pen -E && pylint tests -E

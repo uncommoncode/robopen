@@ -1,5 +1,6 @@
 from xml.dom import minidom
 import re
+
 import numpy as np
 
 from .bezier import CubicBezier
