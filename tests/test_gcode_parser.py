@@ -1,5 +1,7 @@
 import unittest
 
+import numpy as np
+
 from pen.gcode import GCode
 from pen.gcode import PenMode
 from pen.gcode import parse_gcode
