@@ -115,16 +115,16 @@ class NGCParser:
 
 class GCodeOperator:
     def get_pen_distance(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_aabb(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_duration(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_end_position(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_pen_mode_update(self):
         return None
@@ -228,7 +228,7 @@ def parse_gcode(command, current_position):
             rate = int(m.group(5))
             return ArcOperator(current_position, [x, y], [i, j], rate_eu=rate)
         else:
-            raise NotImplemented('Unsupported gcode type: {} in: {}'.format(gcode, command))
+            raise NotImplementedError('Unsupported gcode type: {} in: {}'.format(gcode, command))
 
 
 def get_gcode_bounds(commands):

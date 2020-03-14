@@ -163,10 +163,10 @@ def greedy_tsp(draw_paths):
             min_i = i
             min_distance = distance_to_origin
 
-    visited = np.zeros(cost_matrix.shape[0], dtype=np.int)
+    visited = np.zeros(cost_matrix.shape[0], dtype=np.int)  # pylint: disable=E1136
 
     max_value = 1e9
-    search_matrix = cost_matrix + np.eye(cost_matrix.shape[0]) * max_value
+    search_matrix = cost_matrix + np.eye(cost_matrix.shape[0]) * max_value  # pylint: disable=E1136
 
     current_node = min_i
     order = []

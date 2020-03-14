@@ -41,9 +41,9 @@ def run_gcode(gcodes, device):
                 raise RuntimeError('Device not ready to draw in state: {}'.format(device.get_state()))
             # GRBL recommends a soft reset on start.
             device.run_command(grbl.GRBL.soft_reset())
-            commands.set_units_mm()
-            commands.set_coordinates_absolute()
-            commands.set_feed_rate(1000)
+            commands.set_units_mm()  # pylint: disable=E1101
+            commands.set_coordinates_absolute()  # pylint: disable=E1101
+            commands.set_feed_rate(1000)  # pylint: disable=E1101
 
         try:
             for command in tqdm.tqdm(gcodes):

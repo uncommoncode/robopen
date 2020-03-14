@@ -66,7 +66,7 @@ class Pen:
             tx = np.array(point)
             tx[0] = self.draw_width - tx[0]
             return tx
-        raise NotImplemented('Unsupported mode: {}'.format(self.origin_mode))
+        raise NotImplementedError('Unsupported mode: {}'.format(self.origin_mode))
 
     def translate_point_svg(self, point):
         # SVG has the origin at the top left, we need to get to positive is up with y components.
@@ -74,21 +74,21 @@ class Pen:
             tx = np.array(point)
             tx[1] = self.draw_height - tx[1]
             return tx
-        raise NotImplemented('Unsupported mode: {}'.format(self.origin_mode))
+        raise NotImplementedError('Unsupported mode: {}'.format(self.origin_mode))
 
 
 class Drawable:
     def to_gcode(self, pen):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def to_svg_node(self, pen):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_aabb(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def get_pen_path(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
 
 class DrawPath(Drawable):

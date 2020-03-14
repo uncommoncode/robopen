@@ -18,5 +18,6 @@ setup(
         'halo >= 0.0.29',
         'tqdm >= 4.0.0',
         'pyserial >= 3.4',
+        'ipython',
     ],
 )
