@@ -128,13 +128,13 @@ class SVGPathDataParser:
     def peek_token(self):
         if len(self.tokens) == 0:
             return None
-        return self.tokens[0]
+        return self.tokens[0].strip()
 
     def pop_token(self):
         if len(self.tokens) == 0:
             return None
         token = self.tokens.pop(0)
-        return token
+        return token.strip()
 
     def parse_scalar(self):
         return float(self.pop_token())
@@ -230,6 +230,8 @@ class SVGPathDataParser:
                     command = HLineCommand(v, absolute=is_absolute)
                     self.commands.append(command)
                     state = STATE_HLINE
+                elif token == '':
+                    continue
                 else:
                     raise RuntimeError('Unsupported token: {} "{}" {}'.format(token, data, self.commands[-1]))
             elif state == STATE_MOVE:
@@ -447,7 +449,10 @@ class SVGParser:
 
     def element_to_path(self, element):
         attrs = element.attributes
+        style = None
+        if 'style' in attrs:
+            style = attrs['style'].value
         return SVGPath(
             data=attrs['d'].value,
-            style=attrs['style'].value,
+            style=style,
         )

@@ -44,8 +44,13 @@ def run_gcode(gcodes, device):
             commands.set_coordinates_absolute()
             commands.set_feed_rate(1000)
 
-        for command in tqdm.tqdm(gcodes):
-            device.run_command(command)
+        try:
+            for command in tqdm.tqdm(gcodes):
+                device.run_command(command)
+        except KeyboardInterrupt:
+            with halo.Halo(text='Terminating...', spinner='monkey'):
+                device.run_command(gcode.GCode.pen_up())
+                device.run_command(gcode.GCode.move_fast((0, 0)))
 
         with halo.Halo(text='Waiting for run to complete...', spinner='hearts'):
             while device.get_state() == eleksdraw.State.RUN:
